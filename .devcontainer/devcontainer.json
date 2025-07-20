@@ -1,5 +1,5 @@
 {
-  "name": "Stata-Python-Julia Environment",
+  "name": "Stata-Python-Julia-R Environment",
   "image": "mcr.microsoft.com/devcontainers/base:debian",
   "features": {
     "ghcr.io/devcontainers/features/python:1": {
@@ -7,14 +7,18 @@
     },
     "ghcr.io/devcontainers/features/julia:1": {
       "version": "1.9"
+    },
+    "ghcr.io/devcontainers/features/r:1": {
+      "version": "4.3.1"
     }
   },
-  "postCreateCommand": "pip install -r ./python/requirements.txt",
+  "postCreateCommand": "pip install -r ./python/requirements.txt && Rscript ./r/install_packages.R",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "julialang.language-julia"
+        "julialang.language-julia",
+        "ikuyadeu.r"
       ]
     }
   }
