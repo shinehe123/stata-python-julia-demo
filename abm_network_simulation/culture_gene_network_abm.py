@@ -1,7 +1,7 @@
 # Step 1: 环境搭建与工具库导入
 
 # 安装必要工具库（如果是Jupyter/Colab环境，直接运行此行即可。如果是在命令行，去掉 '!'）
-!pip install networkx mesa matplotlib seaborn pandas
+# pip install networkx mesa matplotlib seaborn pandas
 
 # 导入必要工具库
 import networkx as nx

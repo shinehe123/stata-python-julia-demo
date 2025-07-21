@@ -1,0 +1,5 @@
+networkx
+mesa
+matplotlib
+seaborn
+pandas
