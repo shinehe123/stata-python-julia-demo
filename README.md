@@ -11,3 +11,4 @@ The agent-based model is provided in `abm_network_simulation/culture_gene_networ
 2. Open the notebook in Jupyter and execute all cells. Alternatively you can run it as a script after removing the leading `!` from the `pip install` line.
 
 Running the notebook writes simulation results to `abm_network_simulation_results.csv` and saves PNG figures. These files are ignored by Git using `.gitignore`.
+
