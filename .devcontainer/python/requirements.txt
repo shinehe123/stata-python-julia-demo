@@ -7,3 +7,5 @@ statsmodels
 seaborn
 jupyter
 openpyxl
+networkx
+mesa
