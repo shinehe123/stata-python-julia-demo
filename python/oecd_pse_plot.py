@@ -1,3 +1,12 @@
+"""Download and plot OECD %PSE data for Russia vs OECD average.
+
+The script streams data from the OECD's DP_LIVE endpoint, cleans it into a
+``pandas`` ``DataFrame`` and saves a comparison plot as a PNG file.  It is
+designed to run in non‑interactive environments (CI, terminals without GUI
+support, etc.).
+"""
+
+from pathlib import Path
 import csv
 import requests
 import pandas as pd
@@ -39,18 +48,25 @@ def fetch_oecd_data():
     return df
 
 
-def plot_data(df: pd.DataFrame) -> None:
-    """Plot %PSE for Russia and OECD average."""
+def plot_data(df: pd.DataFrame, out_file: Path) -> None:
+    """Plot %PSE for Russia and OECD average and save to *out_file*."""
     plt.figure(figsize=(12, 6))
-    plt.plot(df.index, df["RUS"], marker="o", label="俄罗斯 %PSE")
-    plt.plot(df.index, df["OECD"], marker="s", linestyle="--", label="OECD国家平均 %PSE")
-    plt.title("俄罗斯与OECD国家平均农业支持率对比 (2000-2022)")
-    plt.xlabel("年份")
-    plt.ylabel("%PSE (占农业总产值百分比)")
+    plt.plot(df.index, df["RUS"], marker="o", label="Russia %PSE")
+    plt.plot(
+        df.index,
+        df["OECD"],
+        marker="s",
+        linestyle="--",
+        label="OECD average %PSE",
+    )
+    plt.title("Russia vs OECD Agricultural Support (2000-2022)")
+    plt.xlabel("Year")
+    plt.ylabel("%PSE")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(out_file, dpi=150)
+    print(f"Plot saved to {out_file}")
 
 
 def main():
@@ -60,7 +76,8 @@ def main():
         return
 
     print(df.describe())
-    plot_data(df)
+    output = Path(__file__).with_suffix(".png")
+    plot_data(df, output)
 
 
 if __name__ == "__main__":
