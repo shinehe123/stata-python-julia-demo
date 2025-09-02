@@ -5,7 +5,13 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Tuple, Dict
 
-from src.sources.faostat import fetch_qcl, fetch_trade_tm, ITEMS, ELEMENTS_QCL
+from src.sources.faostat import (
+    fetch_qcl,
+    fetch_tm_quantity,
+    ITEMS,
+    ELEMENTS_QCL,
+    ELEMENTS_TM,
+)
 from src.sources.worldbank import fetch_wb_multi
 
 # Configure logging
@@ -48,7 +54,13 @@ def _fetch_country(iso3c: str, name: str, fao_code: int) -> pd.DataFrame:
     df["soybean_production_tonnes"] = s_prod.set_index("year")["value"].reindex(df["year"]).values
 
     # Trade (wheat exports)
-    w_exp = fetch_trade_tm(ITEMS["wheat"], 5910, fao_code, START_YEAR, END_YEAR)
+    w_exp = fetch_tm_quantity(
+        ITEMS["wheat"],
+        ELEMENTS_TM["export_qty"],
+        fao_code,
+        START_YEAR,
+        END_YEAR,
+    )
     df["wheat_export_tonnes"] = w_exp.set_index("year")["value"].reindex(df["year"]).values
 
     # World Bank indicators

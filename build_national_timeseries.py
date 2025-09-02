@@ -3,7 +3,14 @@
 import pandas as pd
 from pathlib import Path
 from src.sources.worldbank import fetch_wb_multi
-from src.sources.faostat import fetch_qcl, fetch_trade_tm, ITEMS, ELEMENTS_QCL, AREA_RUS
+from src.sources.faostat import (
+    fetch_qcl,
+    fetch_tm_quantity,
+    ITEMS,
+    ELEMENTS_QCL,
+    ELEMENTS_TM,
+    AREA_RUS,
+)
 from src.sources.nasa_power import fetch_power_annual, compute_gdd
 from src.sources.usda_psd import load_psd_local
 
@@ -36,8 +43,8 @@ def main(out_csv: Path, schema_csv: Path, psd_csv: Path = None):
     prod["grain_yield_t_per_ha"] = w_yield.set_index("year")["value"].reindex(prod["year"]).values
 
     # --- FAOSTAT Trade (TM) for wheat exports/imports ---
-    w_exp = fetch_trade_tm(ITEMS["wheat"], 5910, AREA_RUS, START, END)
-    w_imp = fetch_trade_tm(ITEMS["wheat"], 5610, AREA_RUS, START, END)
+    w_exp = fetch_tm_quantity(ITEMS["wheat"], ELEMENTS_TM["export_qty"], AREA_RUS, START, END)
+    w_imp = fetch_tm_quantity(ITEMS["wheat"], ELEMENTS_TM["import_qty"], AREA_RUS, START, END)
     prod["wheat_export_tonnes"] = w_exp.set_index("year")["value"].reindex(prod["year"]).values
     prod["grain_export_tonnes"] = prod["wheat_export_tonnes"]
     prod["grain_import_tonnes"] = w_imp.set_index("year")["value"].reindex(prod["year"]).values
