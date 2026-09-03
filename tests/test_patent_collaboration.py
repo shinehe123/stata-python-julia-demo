@@ -3,7 +3,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from patent_collaboration.cli import Company, normalize_assignees, patent_rows, query_for, read_companies
+from patent_collaboration.cli import (
+    Company,
+    infer_patent_type,
+    normalize_assignees,
+    parse_field_mapping,
+    patent_rows,
+    query_for,
+    read_companies,
+    read_repaco,
+)
 
 
 class CollaborationTests(unittest.TestCase):
@@ -25,10 +34,14 @@ class CollaborationTests(unittest.TestCase):
             "assignees": [{"name": "甲公司"}, {"name": "乙大学"}, {"name": "乙大学"}],
         }]
         fields = {key: key for key in ("publication_number", "title", "application_date", "assignees")}
+        fields.update(application_number="application_number", patent_type="patent_type",
+                      applicant_addresses="applicant_addresses")
         rows = list(patent_rows(Company("1", "甲公司", ()), records, fields))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["partner_name"], "乙大学")
         self.assertEqual(rows[0]["all_assignees"], "甲公司|乙大学")
+        self.assertEqual(rows[0]["application_number"], "")
+        self.assertEqual(rows[0]["patent_type"], "发明申请")
 
     def test_rejects_broad_query_hit_without_exact_company_assignee(self):
         records = [{
@@ -38,6 +51,8 @@ class CollaborationTests(unittest.TestCase):
             "assignees": "甲公司集团子公司 | 乙大学",
         }]
         fields = {key: key for key in ("publication_number", "title", "application_date", "assignees")}
+        fields.update(application_number="application_number", patent_type="patent_type",
+                      applicant_addresses="applicant_addresses")
         self.assertEqual(list(patent_rows(Company("1", "甲公司", ()), records, fields)), [])
 
     def test_normalizes_supported_assignee_shapes(self):
@@ -45,6 +60,32 @@ class CollaborationTests(unittest.TestCase):
 
     def test_splits_patsnap_pipe_delimited_assignees(self):
         self.assertEqual(normalize_assignees("甲公司 | 乙大学 | 甲公司"), ["甲公司", "乙大学"])
+
+    def test_calibrated_p002_fields_and_address_override(self):
+        fields = parse_field_mapping(["applicant_addresses=biblio.addresses"])
+        self.assertEqual(fields["application_number"], "apno")
+        self.assertEqual(fields["patent_type"], "patent_type")
+        self.assertEqual(fields["applicant_addresses"], "biblio.addresses")
+
+    def test_aligns_address_and_excludes_repaco_group_member(self):
+        record = {
+            "pn": "CN1U", "apno": "CN2020", "title": "装置", "apdt": 20200102,
+            "original_assignee": "甲公司|甲子公司|乙大学",
+            "address": "北京市|上海市|杭州市",
+        }
+        rows = list(patent_rows(Company("1", "甲公司", ()), [record], parse_field_mapping([]),
+                                {"甲公司", "甲子公司"}))
+        self.assertEqual([row["partner_name"] for row in rows], ["乙大学"])
+        self.assertEqual(rows[0]["applicant_addresses"], "北京市|上海市|杭州市")
+        self.assertEqual(rows[0]["listed_company_addresses"], "北京市")
+
+    def test_repaco_reader_and_type_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "repaco.csv"
+            path.write_text("code,name\n1,甲公司（集团）\n", encoding="utf-8")
+            self.assertEqual(read_repaco(path), {"1": {"甲公司(集团)"}})
+        self.assertEqual(infer_patent_type("CN123S"), "外观设计")
+        self.assertEqual(infer_patent_type("WO123A1"), "发明申请")
 
 
 if __name__ == "__main__":

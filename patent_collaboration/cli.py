@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -49,6 +50,14 @@ def nested(value: Any, dotted_path: str) -> Any:
         else:
             value = value[part]
     return value
+
+
+def optional_nested(value: Any, dotted_path: str) -> Any:
+    """Read an optional response field without hiding malformed configured paths."""
+    try:
+        return nested(value, dotted_path)
+    except (KeyError, IndexError):
+        return ""
 
 
 class APIClient:
@@ -110,6 +119,42 @@ def normalize_assignees(raw: Any) -> list[str]:
     return list(dict.fromkeys(result))
 
 
+def normalize_name(value: str) -> str:
+    """Normalize punctuation and whitespace for exact organization matching."""
+    return "".join(str(value).strip().replace("（", "(").replace("）", ")").split()).casefold()
+
+
+def normalize_values(raw: Any) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        return [part.strip() for part in raw.split("|") if part.strip()]
+    if isinstance(raw, list):
+        return [str(item.get("value", item.get("address", "")) if isinstance(item, dict) else item).strip()
+                for item in raw if str(item).strip()]
+    return [str(raw).strip()]
+
+
+def read_repaco(path: Path) -> dict[str, set[str]]:
+    """Read a Repaco-derived code/name membership table."""
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames or not {"code", "name"}.issubset(reader.fieldnames):
+            raise ValueError("Repaco 文件必须包含 code 和 name 列")
+        groups: dict[str, set[str]] = {}
+        for row in reader:
+            code, name = row["code"].strip(), row["name"].strip()
+            if code and name:
+                groups.setdefault(code, set()).add(normalize_name(name))
+        return groups
+
+
+def infer_patent_type(publication_number: str) -> str:
+    match = re.search(r"([ABUS])\d?$", publication_number.strip().upper())
+    kind = match.group(1) if match else ""
+    return {"A": "发明申请", "B": "发明授权", "U": "实用新型", "S": "外观设计"}.get(kind, "")
+
+
 def query_for(company: Company, template: str) -> str:
     expression = " OR ".join(f'\"{name}\"' for name in company.names)
     return template.format(company=expression)
@@ -119,24 +164,37 @@ def patent_rows(
     company: Company,
     records: Iterable[dict[str, Any]],
     fields: dict[str, str],
+    group_names: set[str] | None = None,
 ) -> Iterable[dict[str, str]]:
-    own_names = set(company.names)
+    own_names = {normalize_name(name) for name in company.names}
+    excluded_names = own_names | (group_names or set())
     for record in records:
         assignees = normalize_assignees(nested(record, fields["assignees"]))
         if len(assignees) < 2:
             continue
-        if own_names.isdisjoint(assignees):
+        normalized_assignees = [normalize_name(name) for name in assignees]
+        if own_names.isdisjoint(normalized_assignees):
             continue
-        partners = [name for name in assignees if name not in own_names]
+        partners = [name for name, normalized in zip(assignees, normalized_assignees)
+                    if normalized not in excluded_names]
         if not partners:
             continue
+        publication_number = str(nested(record, fields["publication_number"]))
+        addresses = normalize_values(optional_nested(record, fields["applicant_addresses"]))
+        listed_addresses = [address for name, address in zip(normalized_assignees, addresses)
+                            if name in own_names and address]
+        patent_type = str(optional_nested(record, fields["patent_type"]))
         common = {
             "listed_company_code": company.code,
             "listed_company_name": company.name,
-            "publication_number": str(nested(record, fields["publication_number"])),
+            "publication_number": publication_number,
+            "application_number": str(optional_nested(record, fields["application_number"])),
             "title": str(nested(record, fields["title"])),
             "application_date": str(nested(record, fields["application_date"])),
+            "patent_type": patent_type or infer_patent_type(publication_number),
             "all_assignees": "|".join(assignees),
+            "applicant_addresses": "|".join(addresses),
+            "listed_company_addresses": "|".join(dict.fromkeys(listed_addresses)),
         }
         for partner in partners:
             yield {**common, "partner_name": partner}
@@ -145,9 +203,12 @@ def patent_rows(
 def parse_field_mapping(values: list[str]) -> dict[str, str]:
     mapping = {
         "publication_number": "pn",
+        "application_number": "apno",
         "title": "title",
         "application_date": "apdt",
         "assignees": "original_assignee",
+        "patent_type": "patent_type",
+        "applicant_addresses": "address",
     }
     for value in values:
         key, separator, path = value.partition("=")
@@ -171,6 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--results-path", default="data.results")
     parser.add_argument("--total-path", default="data.total_search_result_count")
     parser.add_argument("--field", action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--repaco", type=Path, help="Repaco 同集团字典 CSV（code,name）")
     parser.add_argument("--timeout", type=float, default=30)
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--sleep", type=float, default=0.2, help="每次请求后的等待秒数")
@@ -187,11 +249,16 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError("分页、重试或等待参数无效")
 
     companies = read_companies(args.companies)
+    groups = read_repaco(args.repaco) if args.repaco else {}
+    # Rows sharing a parent stock code (for example subsidiaries) are also same-group names.
+    for company in companies:
+        groups.setdefault(company.code, set()).update(normalize_name(name) for name in company.names)
     fields = parse_field_mapping(args.field)
     client = APIClient(args.endpoint, api_key, args.timeout, args.retries)
     columns = [
         "listed_company_code", "listed_company_name", "partner_name",
-        "publication_number", "title", "application_date", "all_assignees",
+        "publication_number", "application_number", "title", "application_date",
+        "patent_type", "all_assignees", "applicant_addresses", "listed_company_addresses",
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     seen: set[tuple[str, str, str]] = set()
@@ -212,7 +279,7 @@ def run(args: argparse.Namespace) -> int:
                 total = int(nested(response, args.total_path))
                 if not isinstance(records, list):
                     raise ValueError(f"{args.results_path} 不是数组")
-                for row in patent_rows(company, records, fields):
+                for row in patent_rows(company, records, fields, groups.get(company.code)):
                     identity = (row["listed_company_code"], row["partner_name"], row["publication_number"])
                     if identity not in seen:
                         writer.writerow(row)
