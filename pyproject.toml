@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cnipa-collaboration"
+version = "0.1.0"
+description = "Build listed-company patent collaboration data from CNIPA PSS bibliographic exports"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+cnipa-collaboration = "cnipa_collaboration.cli:main"
+
+[tool.setuptools]
+packages = ["cnipa_collaboration"]
+
