@@ -1,2 +1,72 @@
-# stata-python-julia-demo
-Codex环境测试用 -A cross-language research environment using Stata, Python, and Julia for Codex deployment.
+# CNIPA PSS 上市公司专利合作数据
+
+本仓库提供一个**可复现的数据整理流程**：在国家知识产权局专利检索及分析系统
+（CNIPA PSS）按上市公司及其历史名称检索并导出“著录项目”，再由本工具生成公司—专利
+明细和公司—合作申请人—年份边表。
+
+> PSS 需要登录且可能出现验证码。本项目不绕过登录、验证码或访问频率限制，也不调用
+> 未公开接口。请在网页中人工检索并导出数据，遵守网站条款；工具只读取你合法取得的
+> 导出文件。不要把账号、Cookie 或含个人信息的原始数据提交到 Git。
+
+## 1. 准备上市公司名称表
+
+复制 `examples/companies.csv`，至少填写：
+
+| 列 | 含义 |
+|---|---|
+| `company_id` | 股票代码或稳定的公司标识 |
+| `company_name` | 标准公司全称 |
+| `aliases` | 曾用名/简称，以中文或英文分号分隔 |
+
+建议使用工商登记全称，并把更名、集团母公司和上市主体严格区分。简称容易造成误匹配。
+
+## 2. 在 PSS 导出著录项目
+
+1. 登录 PSS，在“常规检索/高级检索”中逐一检索申请（专利权）人全称及曾用名。
+2. 记录检索式、检索日期和命中量，以便审计和复现。
+3. 导出 CSV、XLSX 或 JSON，至少选择：申请号、公开号、发明名称、申请日、
+   公开（公告）日、申请（专利权）人、IPC 分类号、专利类型。
+4. 将各批次文件放入本地目录。程序用申请号（缺失时用公开号）去重。
+
+检索策略决定召回率。推荐先按精确全称检索，再补充历史名称，并人工抽查同名异企、
+子公司归属、名称变更和申请权转移。工具采用保守的精确规范化匹配，不会擅自把子公司
+并入上市公司。
+
+## 3. 运行
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .                 # XLSX 另用：pip install -e '.[excel]'
+cnipa-collaboration \
+  --companies examples/companies.csv \
+  --input data/pss_batch_*.csv \
+  --output-dir output
+```
+
+输入兼容 PSS 常见中文表头及 README 所列字段的英文字段名；CSV 使用 UTF-8/UTF-8-BOM。
+输出也带 UTF-8 BOM，便于 Excel 和 Stata 正确识别中文。
+
+## 输出口径
+
+* `company_patents.csv`：每行是一项“上市公司—专利”关系；`is_collaboration=true`
+  表示著录项中有至少两个不同申请人。
+* `collaboration_edges.csv`：每行是“上市公司—合作申请人—申请年份”，
+  `joint_patent_count` 是去重后的共同申请专利数。
+
+这里的“合作”仅指**共同申请**，不等同于共同发明、许可、转让或引用关系。申请年份优先
+取申请日，缺失时取公开日。原始申请人文字保留在专利表中，便于回查。
+
+## 质量检查与复现建议
+
+* 保存原始导出文件的哈希、检索日期、检索式、PSS 命中数和导出批次编号。
+* 抽样核对专利详情页；对异常高频合作方检查分隔符和机构更名。
+* 明确子公司纳入规则；需要合并时，将子公司名称显式写入 `aliases`。
+* PSS 页面和导出表头可能调整；若遇到新表头，在
+  `cnipa_collaboration/pipeline.py` 的 `ALIASES` 中补充并增加测试。
+
+运行测试：
+
+```bash
+python -m pytest
+```
