@@ -22,6 +22,17 @@ class CollaborationTests(unittest.TestCase):
             path.write_text("\ufeffcode,name,aliases\n1,甲公司,甲|甲股份\n", encoding="utf-8")
             self.assertEqual(read_companies(path), [Company("1", "甲公司", ("甲", "甲股份"))])
 
+    def test_reads_and_fills_listed_company_address(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "companies.csv"
+            path.write_text("code,name,aliases,address\n1,甲公司,,北京市一号\n", encoding="utf-8")
+            company = read_companies(path)[0]
+        record = {"pn": "CN1A", "title": "方法", "apdt": 20200101,
+                  "original_assignee": "甲公司|乙大学"}
+        rows = list(patent_rows(company, [record], parse_field_mapping([])))
+        self.assertEqual(rows[0]["applicant_addresses"], "北京市一号|")
+        self.assertEqual(rows[0]["listed_company_addresses"], "北京市一号")
+
     def test_query_quotes_each_company_name(self):
         company = Company("1", "甲公司", ("甲股份",))
         self.assertEqual(query_for(company, "AP=({company})"), 'AP=("甲公司" OR "甲股份")')

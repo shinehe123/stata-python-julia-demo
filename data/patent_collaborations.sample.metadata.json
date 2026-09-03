@@ -8,5 +8,6 @@
   "company_counts": {
     "000001": 0,
     "600519": 12
-  }
+  },
+  "address_source": "Listed-company address from data/companies.example.csv (P002 summary does not return applicant addresses)"
 }

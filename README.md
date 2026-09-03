@@ -12,6 +12,7 @@ Codex环境测试用 -A cross-language research environment using Stata, Python,
 * `code`：股票代码；
 * `name`：用于匹配申请人的公司全称；
 * `aliases`：可选，多个曾用名/简称用 `|` 分隔。
+* `address`：可选，上市公司地址；P002 没有返回地址时用于填充目标申请人。
 
 也可以把子公司逐行并入该文件：`code` 填母公司股票代码，`name` 填子公司全称。同一 `code` 下的所有名称会自动视为同集团成员，不会彼此产出合作关系；输出中的 `listed_company_name` 保留实际命中的母/子公司名称，便于追溯。
 
@@ -37,9 +38,9 @@ python -m patent_collaboration.cli \
 | 申请日 | `application_date` | `apdt` | 已校准 |
 | 申请人列表 | `assignees` | `original_assignee` | `|` 分隔 |
 | 专利类型 | `patent_type` | `patent_type` | P002 未返回时按公告号末尾 A/B/U/S 推断 |
-| 申请人地址 | `applicant_addresses` | `address` | 当前 P002 搜索响应未返回，输出留空；须用合同实际提供地址的接口/路径覆盖 |
+| 申请人地址 | `applicant_addresses` | `address` | P002 未返回时，用 companies 表中的上市公司 `address` 填充 |
 
-P002 即使在请求体传入 `field` 也仍返回固定摘要字段。因此，工具的 `--field` 是**响应路径映射**，不是向 P002 申请额外字段。不能从摘要响应可靠获得“发明人地址”；此处按 CSMAR 口径输出的是申请人地址。地址列表与申请人列表等长时，工具按位置生成 `listed_company_addresses`。
+P002 即使在请求体传入 `field` 也仍返回固定摘要字段。因此，工具的 `--field` 是**响应路径映射**，不是向 P002 申请额外字段。不能从摘要响应可靠获得“发明人地址”；此处按 CSMAR 口径输出的是申请人地址。程序保持地址与申请人列表的位置一致；接口地址为空时，将 companies 表中的上市公司地址写入目标申请人的位置，未知的合作方地址保留空位。
 
 其他合同版本可以映射嵌套路径，例如：
 

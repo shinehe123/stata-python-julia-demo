@@ -23,6 +23,7 @@ class Company:
     code: str
     name: str
     aliases: tuple[str, ...]
+    address: str = ""
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -39,7 +40,8 @@ def read_companies(path: Path) -> list[Company]:
         for row in reader:
             aliases = tuple(x.strip() for x in row.get("aliases", "").split("|") if x.strip())
             if row["code"].strip() and row["name"].strip():
-                companies.append(Company(row["code"].strip(), row["name"].strip(), aliases))
+                companies.append(Company(row["code"].strip(), row["name"].strip(), aliases,
+                                         row.get("address", "").strip()))
     return companies
 
 
@@ -181,6 +183,12 @@ def patent_rows(
             continue
         publication_number = str(nested(record, fields["publication_number"]))
         addresses = normalize_values(optional_nested(record, fields["applicant_addresses"]))
+        # P002 summary records omit addresses. Preserve positional alignment and
+        # fill the matched applicant with the listed-company address.
+        addresses = (addresses + [""] * len(assignees))[:len(assignees)]
+        for index, name in enumerate(normalized_assignees):
+            if not addresses[index] and name in own_names:
+                addresses[index] = company.address
         listed_addresses = [address for name, address in zip(normalized_assignees, addresses)
                             if name in own_names and address]
         patent_type = str(optional_nested(record, fields["patent_type"]))
