@@ -1,0 +1,12 @@
+{
+  "source": "Patsnap Open Platform P002",
+  "endpoint": "https://connect.zhihuiya.com/search/patent/query-search-patent/v2",
+  "retrieved_at_utc": "2026-09-03",
+  "scope": "Demonstration run for the two companies in data/companies.example.csv",
+  "row_count": 15,
+  "patent_count": 15,
+  "company_counts": {
+    "000001": 3,
+    "600519": 12
+  }
+}
